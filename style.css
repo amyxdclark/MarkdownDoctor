@@ -29,6 +29,16 @@ header {
     position: relative;
 }
 
+.header-logo {
+    max-width: 400px;
+    width: 100%;
+    height: auto;
+    margin-bottom: 20px;
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+}
+
 header h1 {
     font-size: 2.5rem;
     margin-bottom: 10px;
@@ -430,6 +440,10 @@ footer {
 }
 
 @media (max-width: 768px) {
+    .header-logo {
+        max-width: 250px;
+    }
+    
     header h1 {
         font-size: 2rem;
     }
