@@ -211,7 +211,7 @@ function hideStatus() {
 function formatMarkdownForEmail(markdown) {
     let text = markdown;
     
-    // Apply formatting options
+    // Apply formatting options - process bold before italic to avoid conflicts
     if (ignoreBoldCheckbox.checked) {
         // Remove bold markers
         text = text.replace(/\*\*(.+?)\*\*/g, '$1');
@@ -353,8 +353,8 @@ function parseMarkdown(markdown) {
                 tableRows = [];
             }
             
-            // Skip separator lines
-            if (line.match(/^\|?[\s\-:|]+\|?$/)) {
+            // Skip separator lines (must contain at least one dash or colon)
+            if (line.match(/^\|?[\s]*[-:|]+[\s]*\|?$/) && line.includes('-')) {
                 continue;
             }
             
@@ -506,7 +506,9 @@ function parseInlineFormatting(text) {
     // If all formatting is ignored, just return plain text
     if (ignoreBoldCheckbox.checked && ignoreItalicCheckbox.checked && ignoreCodeCheckbox.checked) {
         let plainText = text;
+        // Process in order: bold, then italic, then code
         plainText = plainText.replace(/\*\*(.+?)\*\*/g, '$1');
+        plainText = plainText.replace(/__(.+?)__/g, '$1');
         plainText = plainText.replace(/\*(.+?)\*/g, '$1');
         plainText = plainText.replace(/_(.+?)_/g, '$1');
         plainText = plainText.replace(/`(.+?)`/g, '$1');
@@ -514,12 +516,12 @@ function parseInlineFormatting(text) {
         return children;
     }
     
-    // Parse inline formatting with regex
+    // Parse inline formatting with regex - order matters: bold before italic
     let remaining = text;
     let lastIndex = 0;
     
-    // Combined regex to match bold, italic, and code
-    const regex = /(\*\*|__|`|\*)(.+?)\1/g;
+    // Combined regex to match bold, italic, and code (bold patterns first)
+    const regex = /(\*\*|__|`|\*|_)(.+?)\1/g;
     let match;
     
     while ((match = regex.exec(text)) !== null) {
