@@ -471,7 +471,8 @@ function parseMarkdown(markdown) {
         }
         // Handle task lists
         else if (line.match(/^[\s]*-\s+\[(x| )\]\s+/i)) {
-            const isChecked = line.match(/\[x\]/i);
+            const match = line.match(/^[\s]*-\s+\[(x| )\]\s+/i);
+            const isChecked = match[1].toLowerCase() === 'x';
             const text = line.replace(/^[\s]*-\s+\[(x| )\]\s+/i, '');
             const checkbox = isChecked ? '☑ ' : '☐ ';
             const children = parseInlineFormatting(text);
@@ -560,8 +561,7 @@ function parseInlineFormatting(text) {
     const { TextRun, ExternalHyperlink } = docx;
     const children = [];
     
-    // First, handle links separately as they need special treatment
-    // Extract and replace links with placeholders
+    // First, handle links separately and replace with placeholders
     const linkPlaceholders = [];
     let textWithPlaceholders = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (match, linkText, url) => {
         const placeholder = `__LINK_${linkPlaceholders.length}__`;
@@ -589,80 +589,70 @@ function parseInlineFormatting(text) {
         return children;
     }
     
-    // Parse inline formatting with enhanced regex - order matters: bold before italic
-    let lastIndex = 0;
+    // Parse inline formatting - handle each type separately to avoid conflicts
+    let currentText = textWithPlaceholders;
+    let position = 0;
     
-    // Combined regex to match bold, italic, strikethrough, code, and link placeholders
-    const regex = /(\*\*|__|~~|`|\*|_|__LINK_\d+__)(.+?)(\1|__)/g;
-    let match;
-    
-    while ((match = regex.exec(textWithPlaceholders)) !== null) {
-        const marker = match[1];
-        let content = match[2];
-        const beforeText = textWithPlaceholders.substring(lastIndex, match.index);
-        
-        // Add text before the match
-        if (beforeText) {
-            children.push(new TextRun({ text: beforeText }));
-        }
-        
-        // Handle link placeholders
-        if (marker.startsWith('__LINK_')) {
-            const linkIndex = parseInt(marker.match(/\d+/)[0]);
+    while (position < currentText.length) {
+        // Check for link placeholders first
+        const linkMatch = currentText.substring(position).match(/^__LINK_(\d+)__/);
+        if (linkMatch) {
+            const linkIndex = parseInt(linkMatch[1]);
             const link = linkPlaceholders[linkIndex];
-            // For DOCX, we'll just show the link text with underline to indicate it's a link
             children.push(new TextRun({ 
                 text: link.text,
                 underline: {},
                 color: '0d9488'
             }));
-            lastIndex = match.index + marker.length;
+            position += linkMatch[0].length;
             continue;
         }
         
-        // Add formatted text based on marker and options
-        if (marker === '**' || marker === '__') {
-            // Bold
-            if (ignoreBoldCheckbox.checked) {
-                children.push(new TextRun({ text: content }));
-            } else {
-                children.push(new TextRun({ text: content, bold: true }));
-            }
-        } else if (marker === '~~') {
-            // Strikethrough
-            children.push(new TextRun({ text: content, strike: true }));
-        } else if (marker === '*' || marker === '_') {
-            // Italic
-            if (ignoreItalicCheckbox.checked) {
-                children.push(new TextRun({ text: content }));
-            } else {
-                children.push(new TextRun({ text: content, italics: true }));
-            }
-        } else if (marker === '`') {
-            // Code
-            if (ignoreCodeCheckbox.checked) {
-                children.push(new TextRun({ text: content }));
-            } else {
-                children.push(new TextRun({ 
-                    text: content,
-                    font: 'Courier New'
-                }));
-            }
+        // Check for bold (**text** or __text__)
+        const boldMatch = currentText.substring(position).match(/^(\*\*|__)(.+?)\1/);
+        if (boldMatch && !ignoreBoldCheckbox.checked) {
+            children.push(new TextRun({ text: boldMatch[2], bold: true }));
+            position += boldMatch[0].length;
+            continue;
         }
         
-        lastIndex = regex.lastIndex;
-    }
-    
-    // Add remaining text
-    if (lastIndex < textWithPlaceholders.length) {
-        let remaining = textWithPlaceholders.substring(lastIndex);
+        // Check for strikethrough (~~text~~)
+        const strikeMatch = currentText.substring(position).match(/^~~(.+?)~~/);
+        if (strikeMatch) {
+            children.push(new TextRun({ text: strikeMatch[1], strike: true }));
+            position += strikeMatch[0].length;
+            continue;
+        }
         
-        // Check for any remaining link placeholders
-        linkPlaceholders.forEach((link, i) => {
-            remaining = remaining.replace(`__LINK_${i}__`, link.text);
-        });
+        // Check for code (`text`)
+        const codeMatch = currentText.substring(position).match(/^`(.+?)`/);
+        if (codeMatch && !ignoreCodeCheckbox.checked) {
+            children.push(new TextRun({ 
+                text: codeMatch[1],
+                font: 'Courier New'
+            }));
+            position += codeMatch[0].length;
+            continue;
+        }
         
-        children.push(new TextRun({ text: remaining }));
+        // Check for italic (*text* or _text_) - do this after bold to avoid conflicts
+        const italicMatch = currentText.substring(position).match(/^(\*|_)(.+?)\1/);
+        if (italicMatch && !ignoreItalicCheckbox.checked) {
+            children.push(new TextRun({ text: italicMatch[2], italics: true }));
+            position += italicMatch[0].length;
+            continue;
+        }
+        
+        // No formatting found, add the current character and continue
+        const char = currentText[position];
+        if (children.length > 0 && children[children.length - 1].text && !children[children.length - 1].bold && !children[children.length - 1].italics && !children[children.length - 1].strike && children[children.length - 1].font !== 'Courier New') {
+            // Append to the last plain text run
+            children[children.length - 1] = new TextRun({ text: children[children.length - 1].text + char });
+        } else {
+            // Start a new plain text run
+            children.push(new TextRun({ text: char }));
+        }
+        position++;
     }
     
     // If no matches found, return plain text (with links restored)
