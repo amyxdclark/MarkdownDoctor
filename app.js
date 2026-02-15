@@ -592,11 +592,20 @@ function parseInlineFormatting(text) {
     // Parse inline formatting - handle each type separately to avoid conflicts
     let currentText = textWithPlaceholders;
     let position = 0;
+    let plainTextBuffer = '';
+    
+    const flushPlainText = () => {
+        if (plainTextBuffer) {
+            children.push(new TextRun({ text: plainTextBuffer }));
+            plainTextBuffer = '';
+        }
+    };
     
     while (position < currentText.length) {
         // Check for link placeholders first
         const linkMatch = currentText.substring(position).match(/^__LINK_(\d+)__/);
         if (linkMatch) {
+            flushPlainText();
             const linkIndex = parseInt(linkMatch[1]);
             const link = linkPlaceholders[linkIndex];
             children.push(new TextRun({ 
@@ -610,8 +619,13 @@ function parseInlineFormatting(text) {
         
         // Check for bold (**text** or __text__)
         const boldMatch = currentText.substring(position).match(/^(\*\*|__)(.+?)\1/);
-        if (boldMatch && !ignoreBoldCheckbox.checked) {
-            children.push(new TextRun({ text: boldMatch[2], bold: true }));
+        if (boldMatch) {
+            flushPlainText();
+            if (ignoreBoldCheckbox.checked) {
+                children.push(new TextRun({ text: boldMatch[2] }));
+            } else {
+                children.push(new TextRun({ text: boldMatch[2], bold: true }));
+            }
             position += boldMatch[0].length;
             continue;
         }
@@ -619,6 +633,7 @@ function parseInlineFormatting(text) {
         // Check for strikethrough (~~text~~)
         const strikeMatch = currentText.substring(position).match(/^~~(.+?)~~/);
         if (strikeMatch) {
+            flushPlainText();
             children.push(new TextRun({ text: strikeMatch[1], strike: true }));
             position += strikeMatch[0].length;
             continue;
@@ -626,34 +641,40 @@ function parseInlineFormatting(text) {
         
         // Check for code (`text`)
         const codeMatch = currentText.substring(position).match(/^`(.+?)`/);
-        if (codeMatch && !ignoreCodeCheckbox.checked) {
-            children.push(new TextRun({ 
-                text: codeMatch[1],
-                font: 'Courier New'
-            }));
+        if (codeMatch) {
+            flushPlainText();
+            if (ignoreCodeCheckbox.checked) {
+                children.push(new TextRun({ text: codeMatch[1] }));
+            } else {
+                children.push(new TextRun({ 
+                    text: codeMatch[1],
+                    font: 'Courier New'
+                }));
+            }
             position += codeMatch[0].length;
             continue;
         }
         
         // Check for italic (*text* or _text_) - do this after bold to avoid conflicts
         const italicMatch = currentText.substring(position).match(/^(\*|_)(.+?)\1/);
-        if (italicMatch && !ignoreItalicCheckbox.checked) {
-            children.push(new TextRun({ text: italicMatch[2], italics: true }));
+        if (italicMatch) {
+            flushPlainText();
+            if (ignoreItalicCheckbox.checked) {
+                children.push(new TextRun({ text: italicMatch[2] }));
+            } else {
+                children.push(new TextRun({ text: italicMatch[2], italics: true }));
+            }
             position += italicMatch[0].length;
             continue;
         }
         
-        // No formatting found, add the current character and continue
-        const char = currentText[position];
-        if (children.length > 0 && children[children.length - 1].text && !children[children.length - 1].bold && !children[children.length - 1].italics && !children[children.length - 1].strike && children[children.length - 1].font !== 'Courier New') {
-            // Append to the last plain text run
-            children[children.length - 1] = new TextRun({ text: children[children.length - 1].text + char });
-        } else {
-            // Start a new plain text run
-            children.push(new TextRun({ text: char }));
-        }
+        // No formatting found, add the current character to buffer
+        plainTextBuffer += currentText[position];
         position++;
     }
+    
+    // Flush any remaining plain text
+    flushPlainText();
     
     // If no matches found, return plain text (with links restored)
     if (children.length === 0) {
