@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MarkdownDoctor - Convert Markdown to DOCX</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📝 MarkdownDoctor</h1>
+            <p class="subtitle">Convert Markdown to DOCX Format</p>
+        </header>
+
+        <main>
+            <div class="input-section">
+                <div class="tabs">
+                    <button class="tab-btn active" data-tab="paste">Paste Markdown</button>
+                    <button class="tab-btn" data-tab="upload">Upload File</button>
+                </div>
+
+                <div class="tab-content active" id="paste-tab">
+                    <textarea id="markdown-input" placeholder="Paste your markdown here...&#10;&#10;Example:&#10;# Heading&#10;## Subheading&#10;- List item 1&#10;- List item 2&#10;&#10;**Bold text** and *italic text*"></textarea>
+                </div>
+
+                <div class="tab-content" id="upload-tab">
+                    <div class="upload-area" id="upload-area">
+                        <input type="file" id="file-input" accept=".md,.markdown,.txt" hidden>
+                        <div class="upload-content">
+                            <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="17 8 12 3 7 8"></polyline>
+                                <line x1="12" y1="3" x2="12" y2="15"></line>
+                            </svg>
+                            <p>Click to upload or drag and drop</p>
+                            <p class="file-types">Supported: .md, .markdown, .txt</p>
+                        </div>
+                        <div class="file-info" id="file-info" style="display: none;">
+                            <p class="file-name"></p>
+                            <button class="remove-file-btn" id="remove-file-btn">Remove</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="action-section">
+                <button id="convert-btn" class="convert-btn">
+                    <span class="btn-text">Convert to DOCX</span>
+                    <span class="btn-icon">→</span>
+                </button>
+                <button id="clear-btn" class="clear-btn">Clear</button>
+            </div>
+
+            <div class="preview-section" id="preview-section" style="display: none;">
+                <h3>Preview</h3>
+                <div id="preview-content" class="preview-content"></div>
+            </div>
+
+            <div class="status-message" id="status-message"></div>
+        </main>
+
+        <footer>
+            <p>Built with ❤️ for easy document conversion</p>
+        </footer>
+    </div>
+
+    <script src="lib/markdown-it.min.js"></script>
+    <script src="lib/docx.js"></script>
+    <script src="lib/FileSaver.min.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
