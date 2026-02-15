@@ -423,9 +423,68 @@ function parseMarkdown(markdown) {
                 heading: HeadingLevel.HEADING_4,
                 spacing: { before: 160, after: 80 }
             }));
+        } else if (line.startsWith('##### ')) {
+            elements.push(new Paragraph({
+                text: line.substring(6),
+                heading: HeadingLevel.HEADING_5,
+                spacing: { before: 150, after: 75 }
+            }));
+        } else if (line.startsWith('###### ')) {
+            elements.push(new Paragraph({
+                text: line.substring(7),
+                heading: HeadingLevel.HEADING_6,
+                spacing: { before: 140, after: 70 }
+            }));
         } 
-        // Handle lists
-        else if (line.match(/^[\s]*[-*]\s+/)) {
+        // Handle blockquotes
+        else if (line.match(/^>\s*/)) {
+            const text = line.replace(/^>\s*/, '');
+            const children = parseInlineFormatting(text);
+            elements.push(new Paragraph({
+                children: children,
+                spacing: { before: 100, after: 100 },
+                indent: { left: 720 },
+                border: {
+                    left: {
+                        color: '10b981',
+                        space: 1,
+                        style: 'single',
+                        size: 6
+                    }
+                }
+            }));
+        }
+        // Handle horizontal rules
+        else if (line.match(/^[\s]*(-{3,}|\*{3,}|_{3,})[\s]*$/)) {
+            elements.push(new Paragraph({
+                text: '',
+                border: {
+                    bottom: {
+                        color: 'd1d5db',
+                        space: 1,
+                        style: 'single',
+                        size: 6
+                    }
+                },
+                spacing: { before: 200, after: 200 }
+            }));
+        }
+        // Handle task lists
+        else {
+            const taskMatch = line.match(/^[\s]*-\s+\[(x| )\]\s+/i);
+            if (taskMatch) {
+                const isChecked = taskMatch[1].toLowerCase() === 'x';
+                const text = line.replace(/^[\s]*-\s+\[(x| )\]\s+/i, '');
+                const checkbox = isChecked ? '☑ ' : '☐ ';
+                const children = parseInlineFormatting(text);
+                elements.push(new Paragraph({
+                    children: [new TextRun({ text: checkbox }), ...children],
+                    spacing: { before: 100, after: 100 },
+                    indent: { left: 720 }
+                }));
+            }
+            // Handle lists
+            else if (line.match(/^[\s]*[-*]\s+/)) {
             const text = line.replace(/^[\s]*[-*]\s+/, '');
             const children = parseInlineFormatting(text);
             elements.push(new Paragraph({
@@ -433,7 +492,7 @@ function parseMarkdown(markdown) {
                 spacing: { before: 100, after: 100 },
                 indent: { left: 720 }
             }));
-        } else if (line.match(/^[\s]*\d+\.\s+/)) {
+            } else if (line.match(/^[\s]*\d+\.\s+/)) {
             const text = line.replace(/^[\s]*\d+\.\s+/, '');
             const num = line.match(/^[\s]*(\d+)\./)[1];
             const children = parseInlineFormatting(text);
@@ -442,21 +501,22 @@ function parseMarkdown(markdown) {
                 spacing: { before: 100, after: 100 },
                 indent: { left: 720 }
             }));
-        }
-        // Handle regular paragraphs
-        else if (line.trim() !== '') {
+            }
+            // Handle regular paragraphs
+            else if (line.trim() !== '') {
             const children = parseInlineFormatting(line);
             elements.push(new Paragraph({
                 children: children,
                 spacing: { before: 100, after: 100 }
             }));
-        }
-        // Handle empty lines
-        else {
+            }
+            // Handle empty lines
+            else {
             elements.push(new Paragraph({
                 text: '',
                 spacing: { before: 120, after: 120 }
             }));
+            }
         }
     }
     
@@ -500,78 +560,131 @@ function createTableElement(rows) {
 }
 
 function parseInlineFormatting(text) {
-    const { TextRun } = docx;
+    const { TextRun, ExternalHyperlink } = docx;
     const children = [];
+    
+    // First, handle links separately and replace with placeholders
+    const linkPlaceholders = [];
+    let textWithPlaceholders = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (match, linkText, url) => {
+        const placeholder = `__LINK_${linkPlaceholders.length}__`;
+        linkPlaceholders.push({ text: linkText, url: url });
+        return placeholder;
+    });
     
     // If all formatting is ignored, just return plain text
     if (ignoreBoldCheckbox.checked && ignoreItalicCheckbox.checked && ignoreCodeCheckbox.checked) {
-        let plainText = text;
-        // Process in order: bold, then italic, then code
+        let plainText = textWithPlaceholders;
+        // Process in order: bold, then italic, then code, then strikethrough
         plainText = plainText.replace(/\*\*(.+?)\*\*/g, '$1');
         plainText = plainText.replace(/__(.+?)__/g, '$1');
         plainText = plainText.replace(/\*(.+?)\*/g, '$1');
         plainText = plainText.replace(/_(.+?)_/g, '$1');
         plainText = plainText.replace(/`(.+?)`/g, '$1');
+        plainText = plainText.replace(/~~(.+?)~~/g, '$1');
+        
+        // Restore links
+        linkPlaceholders.forEach((link, i) => {
+            plainText = plainText.replace(`__LINK_${i}__`, link.text);
+        });
+        
         children.push(new TextRun({ text: plainText }));
         return children;
     }
     
-    // Parse inline formatting with regex - order matters: bold before italic
-    let remaining = text;
-    let lastIndex = 0;
+    // Parse inline formatting - handle each type separately to avoid conflicts
+    let currentText = textWithPlaceholders;
+    let position = 0;
+    let plainTextBuffer = '';
     
-    // Combined regex to match bold, italic, and code (bold patterns first)
-    const regex = /(\*\*|__|`|\*|_)(.+?)\1/g;
-    let match;
+    const flushPlainText = () => {
+        if (plainTextBuffer) {
+            children.push(new TextRun({ text: plainTextBuffer }));
+            plainTextBuffer = '';
+        }
+    };
     
-    while ((match = regex.exec(text)) !== null) {
-        const marker = match[1];
-        const content = match[2];
-        const beforeText = text.substring(lastIndex, match.index);
-        
-        // Add text before the match
-        if (beforeText) {
-            children.push(new TextRun({ text: beforeText }));
+    while (position < currentText.length) {
+        // Check for link placeholders first
+        const linkMatch = currentText.substring(position).match(/^__LINK_(\d+)__/);
+        if (linkMatch) {
+            flushPlainText();
+            const linkIndex = parseInt(linkMatch[1]);
+            const link = linkPlaceholders[linkIndex];
+            children.push(new TextRun({ 
+                text: link.text,
+                underline: {},
+                color: '0d9488'
+            }));
+            position += linkMatch[0].length;
+            continue;
         }
         
-        // Add formatted text based on marker and options
-        if (marker === '**' || marker === '__') {
-            // Bold
+        // Check for bold (**text** or __text__)
+        const boldMatch = currentText.substring(position).match(/^(\*\*|__)(.+?)\1/);
+        if (boldMatch) {
+            flushPlainText();
             if (ignoreBoldCheckbox.checked) {
-                children.push(new TextRun({ text: content }));
+                children.push(new TextRun({ text: boldMatch[2] }));
             } else {
-                children.push(new TextRun({ text: content, bold: true }));
+                children.push(new TextRun({ text: boldMatch[2], bold: true }));
             }
-        } else if (marker === '*' || marker === '_') {
-            // Italic
-            if (ignoreItalicCheckbox.checked) {
-                children.push(new TextRun({ text: content }));
-            } else {
-                children.push(new TextRun({ text: content, italics: true }));
-            }
-        } else if (marker === '`') {
-            // Code
+            position += boldMatch[0].length;
+            continue;
+        }
+        
+        // Check for strikethrough (~~text~~)
+        const strikeMatch = currentText.substring(position).match(/^~~(.*?)~~/);
+        if (strikeMatch) {
+            flushPlainText();
+            children.push(new TextRun({ text: strikeMatch[1], strike: true }));
+            position += strikeMatch[0].length;
+            continue;
+        }
+        
+        // Check for code (`text`)
+        const codeMatch = currentText.substring(position).match(/^`(.+?)`/);
+        if (codeMatch) {
+            flushPlainText();
             if (ignoreCodeCheckbox.checked) {
-                children.push(new TextRun({ text: content }));
+                children.push(new TextRun({ text: codeMatch[1] }));
             } else {
                 children.push(new TextRun({ 
-                    text: content,
+                    text: codeMatch[1],
                     font: 'Courier New'
                 }));
             }
+            position += codeMatch[0].length;
+            continue;
         }
         
-        lastIndex = regex.lastIndex;
+        // Check for italic (*text* or _text_) - do this after bold to avoid conflicts
+        const italicMatch = currentText.substring(position).match(/^(\*|_)(.+?)\1/);
+        if (italicMatch) {
+            flushPlainText();
+            if (ignoreItalicCheckbox.checked) {
+                children.push(new TextRun({ text: italicMatch[2] }));
+            } else {
+                children.push(new TextRun({ text: italicMatch[2], italics: true }));
+            }
+            position += italicMatch[0].length;
+            continue;
+        }
+        
+        // No formatting found, add the current character to buffer
+        plainTextBuffer += currentText[position];
+        position++;
     }
     
-    // Add remaining text
-    if (lastIndex < text.length) {
-        children.push(new TextRun({ text: text.substring(lastIndex) }));
-    }
+    // Flush any remaining plain text
+    flushPlainText();
     
-    // If no matches found, return plain text
+    // If no matches found, return plain text (with links restored)
     if (children.length === 0) {
-        children.push(new TextRun({ text: text }));
+        let finalText = textWithPlaceholders;
+        linkPlaceholders.forEach((link, i) => {
+            finalText = finalText.replace(`__LINK_${i}__`, link.text);
+        });
+        children.push(new TextRun({ text: finalText }));
     }
     
     return children;
