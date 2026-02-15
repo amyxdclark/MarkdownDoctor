@@ -10,10 +10,17 @@ const fileInput = document.getElementById('file-input');
 const fileInfo = document.getElementById('file-info');
 const removeFileBtn = document.getElementById('remove-file-btn');
 const convertBtn = document.getElementById('convert-btn');
+const copyBtn = document.getElementById('copy-btn');
 const clearBtn = document.getElementById('clear-btn');
 const previewSection = document.getElementById('preview-section');
 const previewContent = document.getElementById('preview-content');
 const statusMessage = document.getElementById('status-message');
+
+// Formatting options
+const ignoreBoldCheckbox = document.getElementById('ignore-bold');
+const ignoreItalicCheckbox = document.getElementById('ignore-italic');
+const ignoreCodeCheckbox = document.getElementById('ignore-code');
+const convertTablesCheckbox = document.getElementById('convert-tables');
 
 let currentMarkdown = '';
 let currentFile = null;
@@ -171,6 +178,25 @@ clearBtn.addEventListener('click', () => {
     hideStatus();
 });
 
+// Copy button for email-ready output
+copyBtn.addEventListener('click', async () => {
+    if (!currentMarkdown.trim()) {
+        showStatus('Please enter or upload markdown content', 'error');
+        return;
+    }
+    
+    try {
+        // Apply formatting options and convert to plain text for email
+        const formattedText = formatMarkdownForEmail(currentMarkdown);
+        
+        await navigator.clipboard.writeText(formattedText);
+        showStatus('✓ Text copied to clipboard! Ready to paste into email.', 'success');
+    } catch (error) {
+        console.error('Copy error:', error);
+        showStatus('Error copying to clipboard: ' + error.message, 'error');
+    }
+});
+
 // Status message helpers
 function showStatus(message, type) {
     statusMessage.textContent = message;
@@ -179,6 +205,111 @@ function showStatus(message, type) {
 
 function hideStatus() {
     statusMessage.className = 'status-message';
+}
+
+// Format markdown for email (plain text with proper formatting)
+function formatMarkdownForEmail(markdown) {
+    let text = markdown;
+    
+    // Apply formatting options - process bold before italic to avoid conflicts
+    if (ignoreBoldCheckbox.checked) {
+        // Remove bold markers
+        text = text.replace(/\*\*(.+?)\*\*/g, '$1');
+        text = text.replace(/__(.+?)__/g, '$1');
+    }
+    
+    if (ignoreItalicCheckbox.checked) {
+        // Remove italic markers
+        text = text.replace(/\*(.+?)\*/g, '$1');
+        text = text.replace(/_(.+?)_/g, '$1');
+    }
+    
+    if (ignoreCodeCheckbox.checked) {
+        // Remove inline code markers
+        text = text.replace(/`(.+?)`/g, '$1');
+    }
+    
+    // Convert markdown tables to plain text if enabled
+    if (convertTablesCheckbox.checked) {
+        text = convertTablesToPlainText(text);
+    }
+    
+    return text;
+}
+
+// Convert markdown tables to plain text representation
+function convertTablesToPlainText(text) {
+    const lines = text.split('\n');
+    const result = [];
+    let inTable = false;
+    let tableRows = [];
+    
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        
+        // Check if this is a table row
+        if (line.includes('|')) {
+            if (!inTable) {
+                inTable = true;
+                tableRows = [];
+            }
+            
+            // Skip separator lines
+            if (line.match(/^\|[\s\-:|]+\|$/)) {
+                continue;
+            }
+            
+            tableRows.push(line);
+        } else {
+            // End of table
+            if (inTable && tableRows.length > 0) {
+                result.push(formatTableAsPlainText(tableRows));
+                tableRows = [];
+                inTable = false;
+            }
+            result.push(line);
+        }
+    }
+    
+    // Handle table at end of file
+    if (inTable && tableRows.length > 0) {
+        result.push(formatTableAsPlainText(tableRows));
+    }
+    
+    return result.join('\n');
+}
+
+// Format table rows as plain text
+function formatTableAsPlainText(rows) {
+    const parsedRows = rows.map(row => {
+        return row.split('|')
+            .map(cell => cell.trim())
+            .filter(cell => cell.length > 0);
+    });
+    
+    // Calculate column widths
+    const colWidths = [];
+    parsedRows.forEach(row => {
+        row.forEach((cell, i) => {
+            colWidths[i] = Math.max(colWidths[i] || 0, cell.length);
+        });
+    });
+    
+    // Format rows with padding
+    const formattedRows = parsedRows.map((row, rowIndex) => {
+        const formattedCells = row.map((cell, i) => {
+            return cell.padEnd(colWidths[i], ' ');
+        });
+        return formattedCells.join(' | ');
+    });
+    
+    // Add separator after header
+    if (formattedRows.length > 0) {
+        const separator = colWidths.map(w => '-'.repeat(w)).join('-+-');
+        formattedRows.splice(1, 0, separator);
+    }
+    
+    return formattedRows.join('\n');
 }
 
 // Markdown to DOCX conversion
@@ -203,15 +334,44 @@ async function convertMarkdownToDocx(markdown) {
 }
 
 function parseMarkdown(markdown) {
-    const { Paragraph, TextRun, HeadingLevel } = docx;
+    const { Paragraph, TextRun, HeadingLevel, Table, TableRow, TableCell, WidthType } = docx;
     const lines = markdown.split('\n');
     const elements = [];
     let listItems = [];
     let inCodeBlock = false;
     let codeBlockContent = [];
+    let inTable = false;
+    let tableRows = [];
     
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
+        
+        // Handle tables if enabled
+        if (convertTablesCheckbox.checked && line.includes('|')) {
+            if (!inTable) {
+                inTable = true;
+                tableRows = [];
+            }
+            
+            // Skip separator lines (must contain at least one dash or colon)
+            if (line.match(/^\|?[\s]*[-:|]+[\s]*\|?$/) && line.includes('-')) {
+                continue;
+            }
+            
+            const cells = line.split('|')
+                .map(cell => cell.trim())
+                .filter(cell => cell.length > 0);
+            
+            if (cells.length > 0) {
+                tableRows.push(cells);
+            }
+            continue;
+        } else if (inTable && tableRows.length > 0) {
+            // End of table, create table element
+            elements.push(createTableElement(tableRows));
+            tableRows = [];
+            inTable = false;
+        }
         
         // Handle code blocks
         if (line.startsWith('```')) {
@@ -267,16 +427,18 @@ function parseMarkdown(markdown) {
         // Handle lists
         else if (line.match(/^[\s]*[-*]\s+/)) {
             const text = line.replace(/^[\s]*[-*]\s+/, '');
+            const children = parseInlineFormatting(text);
             elements.push(new Paragraph({
-                text: '• ' + text,
+                children: [new TextRun({ text: '• ' }), ...children],
                 spacing: { before: 100, after: 100 },
                 indent: { left: 720 }
             }));
         } else if (line.match(/^[\s]*\d+\.\s+/)) {
             const text = line.replace(/^[\s]*\d+\.\s+/, '');
             const num = line.match(/^[\s]*(\d+)\./)[1];
+            const children = parseInlineFormatting(text);
             elements.push(new Paragraph({
-                text: num + '. ' + text,
+                children: [new TextRun({ text: num + '. ' }), ...children],
                 spacing: { before: 100, after: 100 },
                 indent: { left: 720 }
             }));
@@ -298,24 +460,119 @@ function parseMarkdown(markdown) {
         }
     }
     
+    // Handle table at end of file
+    if (inTable && tableRows.length > 0) {
+        elements.push(createTableElement(tableRows));
+    }
+    
     return elements;
+}
+
+// Create a table element from rows
+function createTableElement(rows) {
+    const { Table, TableRow, TableCell, Paragraph, TextRun, WidthType, BorderStyle } = docx;
+    
+    const tableRows = rows.map((rowCells, rowIndex) => {
+        const cells = rowCells.map(cellText => {
+            return new TableCell({
+                children: [new Paragraph({
+                    children: parseInlineFormatting(cellText)
+                })],
+                width: {
+                    size: Math.floor(9000 / rowCells.length),
+                    type: WidthType.DXA
+                }
+            });
+        });
+        
+        return new TableRow({
+            children: cells
+        });
+    });
+    
+    return new Table({
+        rows: tableRows,
+        width: {
+            size: 100,
+            type: WidthType.PERCENTAGE
+        }
+    });
 }
 
 function parseInlineFormatting(text) {
     const { TextRun } = docx;
     const children = [];
     
-    // TODO: Implement proper inline formatting (bold, italic, code)
-    // Currently returns plain text with markdown syntax stripped
-    let plainText = text;
-    plainText = plainText.replace(/\*\*(.+?)\*\*/g, '$1');
-    plainText = plainText.replace(/\*(.+?)\*/g, '$1');
-    plainText = plainText.replace(/_(.+?)_/g, '$1');
-    plainText = plainText.replace(/`(.+?)`/g, '$1');
+    // If all formatting is ignored, just return plain text
+    if (ignoreBoldCheckbox.checked && ignoreItalicCheckbox.checked && ignoreCodeCheckbox.checked) {
+        let plainText = text;
+        // Process in order: bold, then italic, then code
+        plainText = plainText.replace(/\*\*(.+?)\*\*/g, '$1');
+        plainText = plainText.replace(/__(.+?)__/g, '$1');
+        plainText = plainText.replace(/\*(.+?)\*/g, '$1');
+        plainText = plainText.replace(/_(.+?)_/g, '$1');
+        plainText = plainText.replace(/`(.+?)`/g, '$1');
+        children.push(new TextRun({ text: plainText }));
+        return children;
+    }
     
-    children.push(new TextRun({
-        text: plainText
-    }));
+    // Parse inline formatting with regex - order matters: bold before italic
+    let remaining = text;
+    let lastIndex = 0;
+    
+    // Combined regex to match bold, italic, and code (bold patterns first)
+    const regex = /(\*\*|__|`|\*|_)(.+?)\1/g;
+    let match;
+    
+    while ((match = regex.exec(text)) !== null) {
+        const marker = match[1];
+        const content = match[2];
+        const beforeText = text.substring(lastIndex, match.index);
+        
+        // Add text before the match
+        if (beforeText) {
+            children.push(new TextRun({ text: beforeText }));
+        }
+        
+        // Add formatted text based on marker and options
+        if (marker === '**' || marker === '__') {
+            // Bold
+            if (ignoreBoldCheckbox.checked) {
+                children.push(new TextRun({ text: content }));
+            } else {
+                children.push(new TextRun({ text: content, bold: true }));
+            }
+        } else if (marker === '*' || marker === '_') {
+            // Italic
+            if (ignoreItalicCheckbox.checked) {
+                children.push(new TextRun({ text: content }));
+            } else {
+                children.push(new TextRun({ text: content, italics: true }));
+            }
+        } else if (marker === '`') {
+            // Code
+            if (ignoreCodeCheckbox.checked) {
+                children.push(new TextRun({ text: content }));
+            } else {
+                children.push(new TextRun({ 
+                    text: content,
+                    font: 'Courier New'
+                }));
+            }
+        }
+        
+        lastIndex = regex.lastIndex;
+    }
+    
+    // Add remaining text
+    if (lastIndex < text.length) {
+        children.push(new TextRun({ text: text.substring(lastIndex) }));
+    }
+    
+    // If no matches found, return plain text
+    if (children.length === 0) {
+        children.push(new TextRun({ text: text }));
+    }
     
     return children;
 }
