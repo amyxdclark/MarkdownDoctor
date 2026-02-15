@@ -1,0 +1,26 @@
+{
+  "name": "markdowndoctor",
+  "version": "1.0.0",
+  "description": "Convert a set of markdown text to docx format",
+  "main": "app.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/amyxdclark/MarkdownDoctor.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/amyxdclark/MarkdownDoctor/issues"
+  },
+  "homepage": "https://github.com/amyxdclark/MarkdownDoctor#readme",
+  "dependencies": {
+    "docx": "^9.5.2",
+    "file-saver": "^2.0.5",
+    "markdown-it": "^14.1.1"
+  }
+}
