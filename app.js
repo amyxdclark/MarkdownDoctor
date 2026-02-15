@@ -17,6 +17,7 @@ const statusMessage = document.getElementById('status-message');
 
 let currentMarkdown = '';
 let currentFile = null;
+const VALID_FILE_EXTENSIONS = ['.md', '.markdown', '.txt'];
 
 // Tab switching
 tabBtns.forEach(btn => {
@@ -74,9 +75,8 @@ removeFileBtn.addEventListener('click', (e) => {
 });
 
 function handleFile(file) {
-    const validExtensions = ['.md', '.markdown', '.txt'];
     const fileName = file.name.toLowerCase();
-    const isValid = validExtensions.some(ext => fileName.endsWith(ext));
+    const isValid = VALID_FILE_EXTENSIONS.some(ext => fileName.endsWith(ext));
     
     if (!isValid) {
         showStatus('Please upload a valid markdown file (.md, .markdown, or .txt)', 'error');
@@ -304,42 +304,15 @@ function parseMarkdown(markdown) {
 function parseInlineFormatting(text) {
     const { TextRun } = docx;
     const children = [];
-    let remaining = text;
     
-    // Simple regex patterns for inline formatting
-    const patterns = [
-        { regex: /\*\*\*(.+?)\*\*\*/g, bold: true, italics: true },  // Bold + Italic
-        { regex: /\*\*(.+?)\*\*/g, bold: true },                      // Bold
-        { regex: /\*(.+?)\*/g, italics: true },                       // Italic
-        { regex: /__(.+?)__/g, bold: true },                          // Bold (underscore)
-        { regex: /_(.+?)_/g, italics: true },                         // Italic (underscore)
-        { regex: /`(.+?)`/g, font: 'Courier New' }                    // Code
-    ];
-    
-    // For simplicity, just handle basic bold and italic
-    // A more sophisticated parser would handle nested formatting
-    let lastIndex = 0;
-    const boldRegex = /\*\*(.+?)\*\*/g;
-    const italicRegex = /\*(.+?)\*/g;
-    const codeRegex = /`(.+?)`/g;
-    
-    // First pass: handle bold
-    let parts = [];
-    let match;
-    let currentText = text;
-    
-    // Replace markdown with markers and collect formatting info
-    const formatted = [];
-    let plainText = currentText;
-    
-    // Simple approach: convert markdown to plain text with formatting
+    // TODO: Implement proper inline formatting (bold, italic, code)
+    // Currently returns plain text with markdown syntax stripped
+    let plainText = text;
     plainText = plainText.replace(/\*\*(.+?)\*\*/g, '$1');
     plainText = plainText.replace(/\*(.+?)\*/g, '$1');
     plainText = plainText.replace(/_(.+?)_/g, '$1');
     plainText = plainText.replace(/`(.+?)`/g, '$1');
     
-    // For now, just return plain text
-    // A full implementation would properly parse and apply formatting
     children.push(new TextRun({
         text: plainText
     }));
