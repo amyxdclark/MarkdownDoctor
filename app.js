@@ -437,8 +437,8 @@ function parseMarkdown(markdown) {
             }));
         } 
         // Handle blockquotes
-        else if (line.match(/^>\s+/)) {
-            const text = line.replace(/^>\s+/, '');
+        else if (line.match(/^>\s*/)) {
+            const text = line.replace(/^>\s*/, '');
             const children = parseInlineFormatting(text);
             elements.push(new Paragraph({
                 children: children,
@@ -470,20 +470,21 @@ function parseMarkdown(markdown) {
             }));
         }
         // Handle task lists
-        else if (line.match(/^[\s]*-\s+\[(x| )\]\s+/i)) {
-            const match = line.match(/^[\s]*-\s+\[(x| )\]\s+/i);
-            const isChecked = match[1].toLowerCase() === 'x';
-            const text = line.replace(/^[\s]*-\s+\[(x| )\]\s+/i, '');
-            const checkbox = isChecked ? '☑ ' : '☐ ';
-            const children = parseInlineFormatting(text);
-            elements.push(new Paragraph({
-                children: [new TextRun({ text: checkbox }), ...children],
-                spacing: { before: 100, after: 100 },
-                indent: { left: 720 }
-            }));
-        }
-        // Handle lists
-        else if (line.match(/^[\s]*[-*]\s+/)) {
+        else {
+            const taskMatch = line.match(/^[\s]*-\s+\[(x| )\]\s+/i);
+            if (taskMatch) {
+                const isChecked = taskMatch[1].toLowerCase() === 'x';
+                const text = line.replace(/^[\s]*-\s+\[(x| )\]\s+/i, '');
+                const checkbox = isChecked ? '☑ ' : '☐ ';
+                const children = parseInlineFormatting(text);
+                elements.push(new Paragraph({
+                    children: [new TextRun({ text: checkbox }), ...children],
+                    spacing: { before: 100, after: 100 },
+                    indent: { left: 720 }
+                }));
+            }
+            // Handle lists
+            else if (line.match(/^[\s]*[-*]\s+/)) {
             const text = line.replace(/^[\s]*[-*]\s+/, '');
             const children = parseInlineFormatting(text);
             elements.push(new Paragraph({
@@ -491,7 +492,7 @@ function parseMarkdown(markdown) {
                 spacing: { before: 100, after: 100 },
                 indent: { left: 720 }
             }));
-        } else if (line.match(/^[\s]*\d+\.\s+/)) {
+            } else if (line.match(/^[\s]*\d+\.\s+/)) {
             const text = line.replace(/^[\s]*\d+\.\s+/, '');
             const num = line.match(/^[\s]*(\d+)\./)[1];
             const children = parseInlineFormatting(text);
@@ -500,21 +501,22 @@ function parseMarkdown(markdown) {
                 spacing: { before: 100, after: 100 },
                 indent: { left: 720 }
             }));
-        }
-        // Handle regular paragraphs
-        else if (line.trim() !== '') {
+            }
+            // Handle regular paragraphs
+            else if (line.trim() !== '') {
             const children = parseInlineFormatting(line);
             elements.push(new Paragraph({
                 children: children,
                 spacing: { before: 100, after: 100 }
             }));
-        }
-        // Handle empty lines
-        else {
+            }
+            // Handle empty lines
+            else {
             elements.push(new Paragraph({
                 text: '',
                 spacing: { before: 120, after: 120 }
             }));
+            }
         }
     }
     
@@ -631,7 +633,7 @@ function parseInlineFormatting(text) {
         }
         
         // Check for strikethrough (~~text~~)
-        const strikeMatch = currentText.substring(position).match(/^~~(.+?)~~/);
+        const strikeMatch = currentText.substring(position).match(/^~~(.*?)~~/);
         if (strikeMatch) {
             flushPlainText();
             children.push(new TextRun({ text: strikeMatch[1], strike: true }));
