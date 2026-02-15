@@ -6,7 +6,7 @@
 
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+    background: linear-gradient(135deg, #0d4d2b 0%, #0a3820 50%, #052211 100%);
     min-height: 100vh;
     padding: 20px;
     line-height: 1.6;
@@ -22,7 +22,7 @@ body {
 }
 
 header {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, #10b981 0%, #059669 50%, #047857 100%);
     color: white;
     padding: 40px 30px;
     text-align: center;
@@ -57,7 +57,7 @@ main {
 }
 
 .tab-btn {
-    padding: 12px 24px;
+    padding: 14px 28px;
     background: none;
     border: none;
     font-size: 1rem;
@@ -66,14 +66,18 @@ main {
     cursor: pointer;
     position: relative;
     transition: color 0.3s;
+    min-height: 44px; /* Touch-friendly minimum */
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .tab-btn:hover {
-    color: #667eea;
+    color: #10b981;
 }
 
 .tab-btn.active {
-    color: #667eea;
+    color: #10b981;
 }
 
 .tab-btn.active::after {
@@ -83,7 +87,7 @@ main {
     left: 0;
     right: 0;
     height: 2px;
-    background: #667eea;
+    background: #10b981;
 }
 
 .tab-content {
@@ -108,7 +112,7 @@ main {
 
 #markdown-input:focus {
     outline: none;
-    border-color: #667eea;
+    border-color: #10b981;
 }
 
 .upload-area {
@@ -122,19 +126,19 @@ main {
 }
 
 .upload-area:hover {
-    border-color: #667eea;
+    border-color: #10b981;
     background: #f3f4f6;
 }
 
 .upload-area.drag-over {
-    border-color: #667eea;
-    background: #eef2ff;
+    border-color: #10b981;
+    background: #d1fae5;
 }
 
 .upload-icon {
     width: 48px;
     height: 48px;
-    color: #667eea;
+    color: #10b981;
     margin: 0 auto 20px;
     display: block;
 }
@@ -164,33 +168,38 @@ main {
 }
 
 .remove-file-btn {
-    padding: 8px 16px;
+    min-height: 44px; /* Touch-friendly */
+    padding: 10px 20px;
     background: #ef4444;
     color: white;
     border: none;
-    border-radius: 6px;
+    border-radius: 8px;
     cursor: pointer;
     font-size: 0.875rem;
-    transition: background 0.3s;
+    transition: background 0.3s, transform 0.2s;
 }
 
 .remove-file-btn:hover {
     background: #dc2626;
+    transform: translateY(-1px);
 }
 
 .action-section {
     display: flex;
     gap: 15px;
     margin-bottom: 30px;
+    flex-wrap: wrap; /* Allow wrapping on smaller screens */
 }
 
 .convert-btn {
     flex: 1;
+    min-width: 200px; /* Ensure minimum width on wrap */
+    min-height: 56px; /* Touch-friendly height */
     padding: 16px 32px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, #10b981 0%, #059669 50%, #047857 100%);
     color: white;
     border: none;
-    border-radius: 8px;
+    border-radius: 12px;
     font-size: 1.1rem;
     font-weight: 600;
     cursor: pointer;
@@ -199,11 +208,12 @@ main {
     justify-content: center;
     gap: 10px;
     transition: transform 0.2s, box-shadow 0.2s;
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25);
 }
 
 .convert-btn:hover {
     transform: translateY(-2px);
-    box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+    box-shadow: 0 10px 25px rgba(16, 185, 129, 0.4);
 }
 
 .convert-btn:active {
@@ -217,19 +227,25 @@ main {
 }
 
 .clear-btn {
-    padding: 16px 24px;
+    min-height: 56px; /* Touch-friendly height */
+    padding: 16px 28px;
     background: #f3f4f6;
     color: #374151;
     border: none;
-    border-radius: 8px;
+    border-radius: 12px;
     font-size: 1rem;
     font-weight: 500;
     cursor: pointer;
-    transition: background 0.3s;
+    transition: background 0.3s, transform 0.2s;
 }
 
 .clear-btn:hover {
     background: #e5e7eb;
+    transform: translateY(-1px);
+}
+
+.clear-btn:active {
+    transform: translateY(0);
 }
 
 .preview-section {
@@ -335,7 +351,7 @@ footer {
 .attribution {
     margin-top: 8px;
     font-weight: 600;
-    color: #667eea;
+    color: #10b981;
 }
 
 .options-section {
@@ -376,7 +392,7 @@ footer {
     width: 18px;
     height: 18px;
     cursor: pointer;
-    accent-color: #667eea;
+    accent-color: #10b981;
 }
 
 .option-item span {
@@ -386,11 +402,13 @@ footer {
 }
 
 .copy-btn {
-    padding: 16px 24px;
-    background: #10b981;
+    min-width: 180px; /* Ensure minimum width on wrap */
+    min-height: 56px; /* Touch-friendly height */
+    padding: 16px 28px;
+    background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%);
     color: white;
     border: none;
-    border-radius: 8px;
+    border-radius: 12px;
     font-size: 1rem;
     font-weight: 600;
     cursor: pointer;
@@ -399,11 +417,12 @@ footer {
     justify-content: center;
     gap: 8px;
     transition: transform 0.2s, box-shadow 0.2s;
+    box-shadow: 0 4px 12px rgba(13, 148, 136, 0.25);
 }
 
 .copy-btn:hover {
     transform: translateY(-2px);
-    box-shadow: 0 10px 20px rgba(16, 185, 129, 0.3);
+    box-shadow: 0 10px 25px rgba(13, 148, 136, 0.4);
 }
 
 .copy-btn:active {

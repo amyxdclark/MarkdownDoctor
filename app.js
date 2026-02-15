@@ -423,7 +423,64 @@ function parseMarkdown(markdown) {
                 heading: HeadingLevel.HEADING_4,
                 spacing: { before: 160, after: 80 }
             }));
+        } else if (line.startsWith('##### ')) {
+            elements.push(new Paragraph({
+                text: line.substring(6),
+                heading: HeadingLevel.HEADING_5,
+                spacing: { before: 150, after: 75 }
+            }));
+        } else if (line.startsWith('###### ')) {
+            elements.push(new Paragraph({
+                text: line.substring(7),
+                heading: HeadingLevel.HEADING_6,
+                spacing: { before: 140, after: 70 }
+            }));
         } 
+        // Handle blockquotes
+        else if (line.match(/^>\s+/)) {
+            const text = line.replace(/^>\s+/, '');
+            const children = parseInlineFormatting(text);
+            elements.push(new Paragraph({
+                children: children,
+                spacing: { before: 100, after: 100 },
+                indent: { left: 720 },
+                border: {
+                    left: {
+                        color: '10b981',
+                        space: 1,
+                        style: 'single',
+                        size: 6
+                    }
+                }
+            }));
+        }
+        // Handle horizontal rules
+        else if (line.match(/^[\s]*(-{3,}|\*{3,}|_{3,})[\s]*$/)) {
+            elements.push(new Paragraph({
+                text: '',
+                border: {
+                    bottom: {
+                        color: 'd1d5db',
+                        space: 1,
+                        style: 'single',
+                        size: 6
+                    }
+                },
+                spacing: { before: 200, after: 200 }
+            }));
+        }
+        // Handle task lists
+        else if (line.match(/^[\s]*-\s+\[(x| )\]\s+/i)) {
+            const isChecked = line.match(/\[x\]/i);
+            const text = line.replace(/^[\s]*-\s+\[(x| )\]\s+/i, '');
+            const checkbox = isChecked ? '☑ ' : '☐ ';
+            const children = parseInlineFormatting(text);
+            elements.push(new Paragraph({
+                children: [new TextRun({ text: checkbox }), ...children],
+                spacing: { before: 100, after: 100 },
+                indent: { left: 720 }
+            }));
+        }
         // Handle lists
         else if (line.match(/^[\s]*[-*]\s+/)) {
             const text = line.replace(/^[\s]*[-*]\s+/, '');
@@ -500,38 +557,67 @@ function createTableElement(rows) {
 }
 
 function parseInlineFormatting(text) {
-    const { TextRun } = docx;
+    const { TextRun, ExternalHyperlink } = docx;
     const children = [];
+    
+    // First, handle links separately as they need special treatment
+    // Extract and replace links with placeholders
+    const linkPlaceholders = [];
+    let textWithPlaceholders = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (match, linkText, url) => {
+        const placeholder = `__LINK_${linkPlaceholders.length}__`;
+        linkPlaceholders.push({ text: linkText, url: url });
+        return placeholder;
+    });
     
     // If all formatting is ignored, just return plain text
     if (ignoreBoldCheckbox.checked && ignoreItalicCheckbox.checked && ignoreCodeCheckbox.checked) {
-        let plainText = text;
-        // Process in order: bold, then italic, then code
+        let plainText = textWithPlaceholders;
+        // Process in order: bold, then italic, then code, then strikethrough
         plainText = plainText.replace(/\*\*(.+?)\*\*/g, '$1');
         plainText = plainText.replace(/__(.+?)__/g, '$1');
         plainText = plainText.replace(/\*(.+?)\*/g, '$1');
         plainText = plainText.replace(/_(.+?)_/g, '$1');
         plainText = plainText.replace(/`(.+?)`/g, '$1');
+        plainText = plainText.replace(/~~(.+?)~~/g, '$1');
+        
+        // Restore links
+        linkPlaceholders.forEach((link, i) => {
+            plainText = plainText.replace(`__LINK_${i}__`, link.text);
+        });
+        
         children.push(new TextRun({ text: plainText }));
         return children;
     }
     
-    // Parse inline formatting with regex - order matters: bold before italic
-    let remaining = text;
+    // Parse inline formatting with enhanced regex - order matters: bold before italic
     let lastIndex = 0;
     
-    // Combined regex to match bold, italic, and code (bold patterns first)
-    const regex = /(\*\*|__|`|\*|_)(.+?)\1/g;
+    // Combined regex to match bold, italic, strikethrough, code, and link placeholders
+    const regex = /(\*\*|__|~~|`|\*|_|__LINK_\d+__)(.+?)(\1|__)/g;
     let match;
     
-    while ((match = regex.exec(text)) !== null) {
+    while ((match = regex.exec(textWithPlaceholders)) !== null) {
         const marker = match[1];
-        const content = match[2];
-        const beforeText = text.substring(lastIndex, match.index);
+        let content = match[2];
+        const beforeText = textWithPlaceholders.substring(lastIndex, match.index);
         
         // Add text before the match
         if (beforeText) {
             children.push(new TextRun({ text: beforeText }));
+        }
+        
+        // Handle link placeholders
+        if (marker.startsWith('__LINK_')) {
+            const linkIndex = parseInt(marker.match(/\d+/)[0]);
+            const link = linkPlaceholders[linkIndex];
+            // For DOCX, we'll just show the link text with underline to indicate it's a link
+            children.push(new TextRun({ 
+                text: link.text,
+                underline: {},
+                color: '0d9488'
+            }));
+            lastIndex = match.index + marker.length;
+            continue;
         }
         
         // Add formatted text based on marker and options
@@ -542,6 +628,9 @@ function parseInlineFormatting(text) {
             } else {
                 children.push(new TextRun({ text: content, bold: true }));
             }
+        } else if (marker === '~~') {
+            // Strikethrough
+            children.push(new TextRun({ text: content, strike: true }));
         } else if (marker === '*' || marker === '_') {
             // Italic
             if (ignoreItalicCheckbox.checked) {
@@ -565,13 +654,24 @@ function parseInlineFormatting(text) {
     }
     
     // Add remaining text
-    if (lastIndex < text.length) {
-        children.push(new TextRun({ text: text.substring(lastIndex) }));
+    if (lastIndex < textWithPlaceholders.length) {
+        let remaining = textWithPlaceholders.substring(lastIndex);
+        
+        // Check for any remaining link placeholders
+        linkPlaceholders.forEach((link, i) => {
+            remaining = remaining.replace(`__LINK_${i}__`, link.text);
+        });
+        
+        children.push(new TextRun({ text: remaining }));
     }
     
-    // If no matches found, return plain text
+    // If no matches found, return plain text (with links restored)
     if (children.length === 0) {
-        children.push(new TextRun({ text: text }));
+        let finalText = textWithPlaceholders;
+        linkPlaceholders.forEach((link, i) => {
+            finalText = finalText.replace(`__LINK_${i}__`, link.text);
+        });
+        children.push(new TextRun({ text: finalText }));
     }
     
     return children;
